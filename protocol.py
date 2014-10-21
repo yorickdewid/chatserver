@@ -2,6 +2,7 @@
 
 from twisted.internet.protocol import Protocol, Factory
 from twisted.internet import reactor
+from model import User, Device 
 import json
 
 class Echo(Protocol):
