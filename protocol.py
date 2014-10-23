@@ -6,10 +6,20 @@ from model import User, Device
 import json
 
 class Echo(Protocol):
-    
+
+    def sendAPI(self, error, code, message, data = None):
+        api = {}
+        api['error'] = error
+        api['code'] = code
+        api['message'] = message
+
+        if data:
+            api['data'] = data
+
+        self.transport.write(json.dumps([api]) + '\n')
+ 
     def clientPing(self, data):
-        message = [{'error':'false', 'code': 206, 'message':'Pong'}]
-        self.transport.write(json.dumps(message) + '\n')
+        self.sendAPI(0,206,'Pong')
 
     def clientLastOnline(self, data):
         try:
@@ -20,16 +30,12 @@ class Echo(Protocol):
             user.getUser()
 
             if user.token:
-                message = [{'error':'false', 'code': 226, 'message':'Last online returned'}]
                 rdata['last_online'] = unicode(user.lastonline.replace(microsecond=0))
-                message[0]['data'] = rdata
-                self.transport.write(json.dumps(message) + '\n')
+                self.sendAPI(0,226,'Last online returned',rdata)
             else:
-                message = [{'error':'true', 'code': 405, 'message':'Credentials invalid'}]
-                self.transport.write(json.dumps(message) + '\n')
+                self.sendAPI(1,405,'Credentials invalid')
         except KeyError:
-            message = [{'error':'true', 'code': 401, 'message':'Not in reference format'}]
-            self.transport.write(json.dumps(message) + '\n')
+            self.sendAPI(1,401,'Not in reference format')
 
     def clientRegister(self, data):
         try:
@@ -38,13 +44,11 @@ class Echo(Protocol):
             token = data['token']
 
             if len(password) != 8:
-                message = [{'error':'true', 'code': 405, 'message':'Password invalid'}]
-                self.transport.write(json.dumps(message) + '\n')
+                self.sendAPI(1,405,'Password invalid')
                 return
 
             if len(token) != 40:
-                message = [{'error':'true', 'code': 406, 'message':'Token invalid'}]
-                self.transport.write(json.dumps(message) + '\n')
+                self.sendAPI(1,406,'Token invalid')
                 return
 
             user = User(username)
@@ -52,11 +56,9 @@ class Echo(Protocol):
             user.password = password
             user.save()
 
-            message = [{'error':'false', 'code': 241, 'message':'User registered'}]
-            self.transport.write(json.dumps(message) + '\n')
+            self.sendAPI(0,241,'User registered')
         except KeyError:
-            message = [{'error':'true', 'code': 401, 'message':'Not in reference format'}]
-            self.transport.write(json.dumps(message) + '\n')
+            self.sendAPI(1,401,'Not in reference format')
 
     def clientRegisterDevice(self, data):
         try:
@@ -67,7 +69,7 @@ class Echo(Protocol):
             user = User(username)
             user.getUser()
 
-            if user.token:
+            if user.token: #TODO
                 if user.token == token:
                     device = Device(device_id)
                     device.user = user
@@ -77,17 +79,14 @@ class Echo(Protocol):
 
                     device.save()
                     user.addDevice(device)
-                    message = [{'error':'false', 'code': 236, 'message':'Device registered'}]
-                    self.transport.write(json.dumps(message) + '\n')
+
+                    self.sendAPI(0,236,'Device registered')
                 else:
-                    message = [{'error':'true', 'code': 405, 'message':'Credentials invalid'}]
-                    self.transport.write(json.dumps(message) + '\n')
+                    self.sendAPI(1,405,'Credentials invalid')
             else:
-                message = [{'error':'true', 'code': 405, 'message':'Credentials invalid'}]
-                self.transport.write(json.dumps(message) + '\n')
+                self.sendAPI(1,405,'Credentials invalid')
         except KeyError:
-            message = [{'error':'true', 'code': 401, 'message':'Not in reference format'}]
-            self.transport.write(json.dumps(message) + '\n')
+            self.sendAPI(1,401,'Not in reference format')
 
     def clientGetToken(self, data):
         try:
@@ -98,21 +97,16 @@ class Echo(Protocol):
             user = User(username)
             user.getUser()
 
-            if user.token:
+            if user.token: #TODO
                 if user.password == password:
-                    message = [{'error':'false', 'code': 246, 'message':'Token returned'}]
                     rdata['token'] = user.token
-                    message[0]['data'] = rdata
-                    self.transport.write(json.dumps(message) + '\n')
+                    self.sendAPI(0,246,'Token returned',rdata)
                 else:
-                    message = [{'error':'true', 'code': 405, 'message':'Credentials invalid'}]
-                    self.transport.write(json.dumps(message) + '\n')
+                    self.sendAPI(1,405,'Credentials invalid')
             else:
-                message = [{'error':'true', 'code': 405, 'message':'Credentials invalid'}]
-                self.transport.write(json.dumps(message) + '\n')
+                self.sendAPI(1,405,'Credentials invalid')
         except KeyError:
-            message = [{'error':'true', 'code': 401, 'message':'Not in reference format'}]
-            self.transport.write(json.dumps(message) + '\n')
+            self.sendAPI(1,401,'Not in reference format')
 
     def handle(self, x):
         return {
@@ -123,33 +117,24 @@ class Echo(Protocol):
             235 : self.clientRegisterDevice,
         }[x]
 
-    def __init__(self):
-        self.error = []
-        self.code = 100
-        self.message = []
-        self.data = []
-
     def dataReceived(self, data):
         try:        
             req = json.loads(data.rstrip())[0]
-            self.code = req['code']
-            self.error = req['error']
-            self.message = req['message']
+            code = req['code']
+            error = req['error']
+            message = req['message']
 
             if 'data' in req:
-                self.data = req['data']
+                data = req['data']
 
-            self.handle(self.code)(self.data)
+            self.handle(code)(data)
         except ValueError:
-            message = [{'error':'true', 'code': 400, 'message':'Send data in JSON'}]
-            self.transport.write(json.dumps(message) + '\n')
+            self.sendAPI(1,400,'Send data in JSON')
         except KeyError:
-            message = [{'error':'true', 'code': 401, 'message':'Not in reference format'}]
-            self.transport.write(json.dumps(message) + '\n')
+            self.sendAPI(1,401,'Not in reference format')
 
     def connectionMade(self):
-        message = [{'error':'false', 'code': 200, 'message':'Server ready'}]
-        self.transport.write(json.dumps(message) + '\n')
+        self.sendAPI(0,200,'Server ready')
         print 'connected'
 
     def connectionLost(self, reason):
