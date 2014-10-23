@@ -108,6 +108,41 @@ class Echo(Protocol):
         except KeyError:
             self.sendAPI(1,401,'Not in reference format')
 
+    def clientGetContactList(self, data):
+        try:
+            username = data['username']
+            token = data['token']
+            rdata = {}
+            rcontacts = []
+
+            user = User(username)
+            user.getUser()
+
+            if user.token: #TODO
+                if user.token == token: #TODO
+                    if 'contacts' in data:
+                        for contact in data['contacts']:
+                            contactuser = User(contact['contact'])
+                            contactuser.getUser()
+
+                            if contactuser.token: #TODO
+                                user.addContact(contactuser)
+
+                    for contact in user.getContactList():
+                        rcontacts.append({'contact':contact.name})
+
+                    if len(rcontacts):
+                        rdata['contacts'] = rcontacts
+                        self.sendAPI(0,211,'Contact list send',rdata)
+                    else:
+                        self.sendAPI(0,211,'Contact list send')
+                else:
+                    self.sendAPI(1,405,'Credentials invalid')
+            else:
+                self.sendAPI(1,405,'Credentials invalid')
+        except KeyError:
+            self.sendAPI(1,401,'Not in reference format')
+
     def handle(self, x):
         return {
             205 : self.clientPing,
@@ -115,14 +150,15 @@ class Echo(Protocol):
             245 : self.clientGetToken,
             225 : self.clientLastOnline,
             235 : self.clientRegisterDevice,
+            210 : self.clientGetContactList
         }[x]
 
     def dataReceived(self, data):
         try:        
             req = json.loads(data.rstrip())[0]
             code = req['code']
-            error = req['error']
-            message = req['message']
+            error = req['error'] #TODO not used at the moment
+            message = req['message'] #TODO not used at the moment
 
             if 'data' in req:
                 data = req['data']
