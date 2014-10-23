@@ -32,12 +32,18 @@ class User:
     def attemptToken(self, token):
         if self.exist():
             if self.token == token:
+                self.update()
                 return 1
 
     def attemptPassword(self, password):
         if self.exist():
             if self.password == password:
+                self.update()
                 return 1
+
+    def update(self):
+        self.cursor.execute('UPDATE user SET last_online=NOW() WHERE username=%s', self.name)
+        self.db.commit()
 
     def getContactList(self):
         contactlist = []

@@ -1,7 +1,6 @@
 #!/usr/bin/python
 
-from twisted.internet.protocol import Protocol, Factory
-from twisted.internet import reactor
+from twisted.internet.protocol import Protocol
 from model import User, Device 
 import json
 
