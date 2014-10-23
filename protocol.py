@@ -31,6 +31,7 @@ class Echo(Protocol):
                 self.sendAPI(0,226,'Last online returned',rdata)
             else:
                 self.sendAPI(1,405,'Credentials invalid')
+
         except KeyError:
             self.sendAPI(1,401,'Not in reference format')
 
@@ -57,7 +58,8 @@ class Echo(Protocol):
             user.save()
 
             self.sendAPI(0,241,'User registered')
-        except KeyError:
+
+        except (KeyError, TypeError):
             self.sendAPI(1,401,'Not in reference format')
 
     def clientRegisterDevice(self, data):
@@ -77,7 +79,8 @@ class Echo(Protocol):
                 self.sendAPI(0,236,'Device registered')
             else:
                 self.sendAPI(1,405,'Credentials invalid')
-        except KeyError:
+
+        except (KeyError, TypeError):
             self.sendAPI(1,401,'Not in reference format')
 
     def clientGetToken(self, data):
@@ -90,7 +93,8 @@ class Echo(Protocol):
                 self.sendAPI(0,246,'Token returned',rdata)
             else:
                 self.sendAPI(1,405,'Credentials invalid')
-        except KeyError:
+
+        except (KeyError, TypeError):
             self.sendAPI(1,401,'Not in reference format')
 
     def clientGetContactList(self, data):
@@ -111,10 +115,12 @@ class Echo(Protocol):
 
                 if len(rcontacts):
                     rdata['contacts'] = rcontacts
+
                 self.sendAPI(0,211,'Contact list send',rdata)
             else:
                 self.sendAPI(1,405,'Credentials invalid')
-        except KeyError:
+
+        except (KeyError, TypeError):
             self.sendAPI(1,401,'Not in reference format')
 
     def clientDeleteContact(self, data):
@@ -130,7 +136,7 @@ class Echo(Protocol):
             else:
                 self.sendAPI(1,405,'Credentials invalid')
 
-        except KeyError:
+        except (KeyError, TypeError):
             self.sendAPI(1,401,'Not in reference format')
 
     def clientDeleteDevice(self, data):
@@ -145,7 +151,7 @@ class Echo(Protocol):
             else:
                 self.sendAPI(1,405,'Credentials invalid')
 
-        except KeyError:
+        except (KeyError, TypeError):
             self.sendAPI(1,401,'Not in reference format')
 
     def clientGetDeviceList(self, data):
@@ -163,7 +169,8 @@ class Echo(Protocol):
                 self.sendAPI(0,221,'Device list send',rdata)
             else:
                 self.sendAPI(1,405,'Credentials invalid')
-        except KeyError:
+
+        except (KeyError, TypeError):
             self.sendAPI(1,401,'Not in reference format')
 
     def clientDelete(self, data):
@@ -174,7 +181,8 @@ class Echo(Protocol):
                 self.sendAPI(0,291,'User data deleted')
             else:
                 self.sendAPI(1,405,'Credentials invalid')
-        except KeyError:
+
+        except (KeyError, TypeError):
             self.sendAPI(1,401,'Not in reference format')
 
     def handle(self, x):
@@ -194,6 +202,7 @@ class Echo(Protocol):
     def dataReceived(self, data):
         try:        
             req = json.loads(data.rstrip())[0]
+            data = None
             code = req['code']
             error = req['error'] #TODO not used at the moment
             message = req['message'] #TODO not used at the moment
@@ -202,6 +211,7 @@ class Echo(Protocol):
                 data = req['data']
 
             self.handle(code)(data)
+
         except ValueError:
             self.sendAPI(1,400,'Send data in JSON')
         except KeyError:
