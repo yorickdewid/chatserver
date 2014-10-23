@@ -23,10 +23,9 @@ class Echo(Protocol):
 
     def clientLastOnline(self, data):
         try:
-            username = data['username']
             rdata = {}
 
-            user = User(username)
+            user = User(data['username'])
             if user.exist():
                 rdata['last_online'] = unicode(user.lastonline.replace(microsecond=0))
                 self.sendAPI(0,226,'Last online returned',rdata)
@@ -37,7 +36,6 @@ class Echo(Protocol):
 
     def clientRegister(self, data):
         try:
-            username = data['username']
             password = data['password']
             token = data['token']
 
@@ -49,7 +47,7 @@ class Echo(Protocol):
                 self.sendAPI(1,406,'Token invalid')
                 return
 
-            user = User(username)
+            user = User(data['username'])
             if user.exist():
                 self.sendAPI(1,441,'Credentials already exist')
                 return
@@ -64,13 +62,9 @@ class Echo(Protocol):
 
     def clientRegisterDevice(self, data):
         try:
-            username = data['username']
-            device_id = data['device']
-            token = data['token']
-
-            user = User(username)
-            if user.attemptToken(token):
-                device = Device(device_id)
+            user = User(data['username'])
+            if user.attemptToken(data['token']):
+                device = Device(data['device'])
                 if device.exist():
                     self.sendAPI(1,436,'Device already exist')
                     return
@@ -91,12 +85,10 @@ class Echo(Protocol):
 
     def clientGetToken(self, data):
         try:
-            username = data['username']
-            password = data['password']
             rdata = {}
 
-            user = User(username)
-            if user.attemptPassword(password):
+            user = User(data['username'])
+            if user.attemptPassword(data['password']):
                 rdata['token'] = user.token
                 self.sendAPI(0,246,'Token returned',rdata)
             else:
@@ -106,13 +98,11 @@ class Echo(Protocol):
 
     def clientGetContactList(self, data):
         try:
-            username = data['username']
-            token = data['token']
             rdata = {}
             rcontacts = []
 
-            user = User(username)
-            if user.attemptToken(token):
+            user = User(data['username'])
+            if user.attemptToken(data['token']):
                 if 'contacts' in data:
                     for contact in data['contacts']:
                         contactuser = User(contact['contact'])
@@ -130,6 +120,22 @@ class Echo(Protocol):
         except KeyError:
             self.sendAPI(1,401,'Not in reference format')
 
+    def clientDeleteContact(self, data):
+        try:
+            user = User(data['username'])
+            if user.attemptToken(data['token']):
+                for contact in data['contacts']:
+                    contactuser = User(contact['contact'])
+                    if contactuser.exist():
+                        user.deleteContact(contactuser)
+
+                self.sendAPI(0,276,'Contacts deleted')
+            else:
+                self.sendAPI(1,405,'Credentials invalid')
+
+        except KeyError:
+            self.sendAPI(1,401,'Not in reference format')
+
     def handle(self, x):
         return {
             205 : self.clientPing,
@@ -137,7 +143,8 @@ class Echo(Protocol):
             245 : self.clientGetToken,
             225 : self.clientLastOnline,
             235 : self.clientRegisterDevice,
-            210 : self.clientGetContactList
+            210 : self.clientGetContactList,
+            275 : self.clientDeleteContact,
         }[x]
 
     def dataReceived(self, data):
