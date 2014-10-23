@@ -11,6 +11,26 @@ class Echo(Protocol):
         message = [{'error':'false', 'code': 206, 'message':'Pong'}]
         self.transport.write(json.dumps(message) + '\n')
 
+    def clientLastOnline(self, data):
+        try:
+            username = data['username']
+            rdata = {}
+
+            user = User(username)
+            user.getUser()
+
+            if user.lastonline:
+                message = [{'error':'false', 'code': 226, 'message':'Last online returned'}]
+                rdata['last_online'] = unicode(user.lastonline.replace(microsecond=0))
+                message[0]['data'] = rdata
+                self.transport.write(json.dumps(message) + '\n')
+            else:
+                message = [{'error':'true', 'code': 405, 'message':'Credentials invalid'}]
+                self.transport.write(json.dumps(message) + '\n')
+        except KeyError:
+            message = [{'error':'true', 'code': 401, 'message':'Not in reference format'}]
+            self.transport.write(json.dumps(message) + '\n')
+
     def clientRegister(self, data):
         try:
             username = data['username']
@@ -68,6 +88,7 @@ class Echo(Protocol):
             205 : self.clientPing,
             240 : self.clientRegister,
             245 : self.clientGetToken,
+            225 : self.clientLastOnline,
         }[x]
 
     def __init__(self):
