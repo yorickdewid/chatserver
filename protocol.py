@@ -38,10 +38,36 @@ class Echo(Protocol):
             message = [{'error':'true', 'code': 401, 'message':'Not in reference format'}]
             self.transport.write(json.dumps(message) + '\n')
 
+    def clientGetToken(self, data):
+        try:
+            username = data['username']
+            password = data['password']
+            rdata = {}
+
+            user = User(username)
+            user.getUser()
+
+            if user.token:
+                if user.password == password:
+                    message = [{'error':'false', 'code': 246, 'message':'Token returned'}]
+                    rdata['token'] = user.token
+                    message[0]['data'] = rdata
+                    self.transport.write(json.dumps(message) + '\n')
+                else:
+                    message = [{'error':'true', 'code': 405, 'message':'Credentials invalid'}]
+                    self.transport.write(json.dumps(message) + '\n')
+            else:
+                message = [{'error':'true', 'code': 405, 'message':'Credentials invalid'}]
+                self.transport.write(json.dumps(message) + '\n')
+        except KeyError:
+            message = [{'error':'true', 'code': 401, 'message':'Not in reference format'}]
+            self.transport.write(json.dumps(message) + '\n')
+
     def handle(self, x):
         return {
             205 : self.clientPing,
             240 : self.clientRegister,
+            245 : self.clientGetToken,
         }[x]
 
     def __init__(self):
