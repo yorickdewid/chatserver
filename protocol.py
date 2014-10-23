@@ -70,13 +70,10 @@ class Echo(Protocol):
                     return
 
                 device.user = user
-
                 if 'phone_number' in data:
                     device.phone_number = data['phone_number']
 
-                device.save()
                 user.addDevice(device)
-
                 self.sendAPI(0,236,'Device registered')
             else:
                 self.sendAPI(1,405,'Credentials invalid')
@@ -136,6 +133,22 @@ class Echo(Protocol):
         except KeyError:
             self.sendAPI(1,401,'Not in reference format')
 
+    def clientDeleteDevice(self, data):
+        try:
+            user = User(data['username'])
+            if user.attemptToken(data['token']):
+                device = Device(data['device'])
+                if device.exist():
+                    user.deleteDevice(device)
+
+                self.sendAPI(0,276,'Device deleted')
+            else:
+                self.sendAPI(1,405,'Credentials invalid')
+
+        except KeyError:
+            self.sendAPI(1,401,'Not in reference format')
+
+
     def handle(self, x):
         return {
             205 : self.clientPing,
@@ -145,6 +158,7 @@ class Echo(Protocol):
             235 : self.clientRegisterDevice,
             210 : self.clientGetContactList,
             275 : self.clientDeleteContact,
+            260 : self.clientDeleteDevice,
         }[x]
 
     def dataReceived(self, data):
