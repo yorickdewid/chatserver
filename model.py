@@ -6,7 +6,7 @@ class User:
     'User class'
 
     def __init__(self, name):
-        self.name = name
+        self.name = name.lower()
         self.token =[] 
         self.password = []
         self.lastonline = []
@@ -22,6 +22,22 @@ class User:
         self.token = row[1]
         self.password = row[3]
         self.lastonline = row[2]
+
+    def exist(self):
+        self.getUser()
+
+        if self.token and self.lastonline:
+           return 1
+
+    def attemptToken(self, token):
+        if self.exist():
+            if self.token == token:
+                return 1
+
+    def attemptPassword(self, password):
+        if self.exist():
+            if self.password == password:
+                return 1
 
     def getContactList(self):
         contactlist = []
@@ -84,7 +100,7 @@ class Device:
     'Device class'
 
     def __init__(self, id):
-        self.device_id = id
+        self.device_id = id.lower()
         self.phone_number = 0
         self.user = []
         self.db = MySQLdb.connect('localhost','python','ABC@123','chatapp')
@@ -101,6 +117,12 @@ class Device:
         user = User(row[2])
         user.getUser()
         self.user = user
+
+    def exist(self):
+        self.getDevice()
+
+        if self.user:
+           return 1
 
     def save(self):
         try:

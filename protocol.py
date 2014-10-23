@@ -27,9 +27,7 @@ class Echo(Protocol):
             rdata = {}
 
             user = User(username)
-            user.getUser()
-
-            if user.token:
+            if user.exist():
                 rdata['last_online'] = unicode(user.lastonline.replace(microsecond=0))
                 self.sendAPI(0,226,'Last online returned',rdata)
             else:
@@ -52,6 +50,10 @@ class Echo(Protocol):
                 return
 
             user = User(username)
+            if user.exist():
+                self.sendAPI(1,441,'Credentials already exist')
+                return
+
             user.token = token
             user.password = password
             user.save()
@@ -67,22 +69,21 @@ class Echo(Protocol):
             token = data['token']
 
             user = User(username)
-            user.getUser()
+            if user.attemptToken(token):
+                device = Device(device_id)
+                if device.exist():
+                    self.sendAPI(1,436,'Device already exist')
+                    return
 
-            if user.token: #TODO
-                if user.token == token:
-                    device = Device(device_id)
-                    device.user = user
+                device.user = user
 
-                    if 'phone_number' in data:
-                        device.phone_number = data['phone_number']
+                if 'phone_number' in data:
+                    device.phone_number = data['phone_number']
 
-                    device.save()
-                    user.addDevice(device)
+                device.save()
+                user.addDevice(device)
 
-                    self.sendAPI(0,236,'Device registered')
-                else:
-                    self.sendAPI(1,405,'Credentials invalid')
+                self.sendAPI(0,236,'Device registered')
             else:
                 self.sendAPI(1,405,'Credentials invalid')
         except KeyError:
@@ -95,14 +96,9 @@ class Echo(Protocol):
             rdata = {}
 
             user = User(username)
-            user.getUser()
-
-            if user.token: #TODO
-                if user.password == password:
-                    rdata['token'] = user.token
-                    self.sendAPI(0,246,'Token returned',rdata)
-                else:
-                    self.sendAPI(1,405,'Credentials invalid')
+            if user.attemptPassword(password):
+                rdata['token'] = user.token
+                self.sendAPI(0,246,'Token returned',rdata)
             else:
                 self.sendAPI(1,405,'Credentials invalid')
         except KeyError:
@@ -116,28 +112,19 @@ class Echo(Protocol):
             rcontacts = []
 
             user = User(username)
-            user.getUser()
+            if user.attemptToken(token):
+                if 'contacts' in data:
+                    for contact in data['contacts']:
+                        contactuser = User(contact['contact'])
+                        if contactuser.exist():
+                            user.addContact(contactuser)
 
-            if user.token: #TODO
-                if user.token == token: #TODO
-                    if 'contacts' in data:
-                        for contact in data['contacts']:
-                            contactuser = User(contact['contact'])
-                            contactuser.getUser()
+                for contact in user.getContactList():
+                    rcontacts.append({'contact':contact.name})
 
-                            if contactuser.token: #TODO
-                                user.addContact(contactuser)
-
-                    for contact in user.getContactList():
-                        rcontacts.append({'contact':contact.name})
-
-                    if len(rcontacts):
-                        rdata['contacts'] = rcontacts
-                        self.sendAPI(0,211,'Contact list send',rdata)
-                    else:
-                        self.sendAPI(0,211,'Contact list send')
-                else:
-                    self.sendAPI(1,405,'Credentials invalid')
+                if len(rcontacts):
+                    rdata['contacts'] = rcontacts
+                self.sendAPI(0,211,'Contact list send',rdata)
             else:
                 self.sendAPI(1,405,'Credentials invalid')
         except KeyError:
