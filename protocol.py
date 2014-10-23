@@ -19,7 +19,7 @@ class Echo(Protocol):
             user = User(username)
             user.getUser()
 
-            if user.lastonline:
+            if user.token:
                 message = [{'error':'false', 'code': 226, 'message':'Last online returned'}]
                 rdata['last_online'] = unicode(user.lastonline.replace(microsecond=0))
                 message[0]['data'] = rdata
@@ -58,6 +58,37 @@ class Echo(Protocol):
             message = [{'error':'true', 'code': 401, 'message':'Not in reference format'}]
             self.transport.write(json.dumps(message) + '\n')
 
+    def clientRegisterDevice(self, data):
+        try:
+            username = data['username']
+            device_id = data['device']
+            token = data['token']
+
+            user = User(username)
+            user.getUser()
+
+            if user.token:
+                if user.token == token:
+                    device = Device(device_id)
+                    device.user = user
+
+                    if 'phone_number' in data:
+                        device.phone_number = data['phone_number']
+
+                    device.save()
+                    user.addDevice(device)
+                    message = [{'error':'false', 'code': 236, 'message':'Device registered'}]
+                    self.transport.write(json.dumps(message) + '\n')
+                else:
+                    message = [{'error':'true', 'code': 405, 'message':'Credentials invalid'}]
+                    self.transport.write(json.dumps(message) + '\n')
+            else:
+                message = [{'error':'true', 'code': 405, 'message':'Credentials invalid'}]
+                self.transport.write(json.dumps(message) + '\n')
+        except KeyError:
+            message = [{'error':'true', 'code': 401, 'message':'Not in reference format'}]
+            self.transport.write(json.dumps(message) + '\n')
+
     def clientGetToken(self, data):
         try:
             username = data['username']
@@ -89,6 +120,7 @@ class Echo(Protocol):
             240 : self.clientRegister,
             245 : self.clientGetToken,
             225 : self.clientLastOnline,
+            235 : self.clientRegisterDevice,
         }[x]
 
     def __init__(self):
