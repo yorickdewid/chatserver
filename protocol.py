@@ -356,8 +356,8 @@ class Echo(Protocol):
             request = json.loads(line)[0]
             cdata = None
             code = request['code']
-            error = request['error'] #TODO not used at the moment
-            message = request['message'] #TODO not used at the moment
+            error = request['error']
+            message = request['message']
 
             if 'data' in request:
                 cdata = request['data']
@@ -365,7 +365,7 @@ class Echo(Protocol):
             self.handle(code)(cdata)
         except ValueError:
             self.sendAPI(1,400,'Send data in JSON')
-        except KeyError:
+        except (KeyError, IndexError):
             self.sendAPI(1,401,'Not in reference format')
 
     def connectionMade(self):
