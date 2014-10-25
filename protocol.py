@@ -206,9 +206,10 @@ class Echo(Protocol):
 
                 for chat in self.factory.chats:
                     if chat.contact.name == user.name:
-                        rdata['username'] = chat.contact.name
+                        rdata['username'] = chat.user.name
                         rdata['port'] = chat.port
                         rdata['session'] = chat.session
+                        rdata['remote'] = chat.user.remote
                         self.sendAPI(0,191,'Confirm chat request',rdata)
 
                 print '%s is authenticated' % user
@@ -233,21 +234,27 @@ class Echo(Protocol):
     def clientRequestChat(self, data):
         try:
             rdata = {}
+            cdata = {}
 
             if self.authenticated:
                 contact = User(data['username'])
                 if contact.exist():
                     request = Chat(self.user, contact, data['port'], uuid.uuid1().time_low)
                     self.factory.chats.append(request)
+                    cdata['session'] = request.session
 
                     for other in self.factory.clients:
                         if contact.name == other.name:
                             rdata['username'] = self.user.name
                             rdata['port'] = request.port
                             rdata['session'] = request.session
+                            rdata['remote'] = self.user.remote
                             self.sendAPI(0,191,'Confirm chat request',rdata,other.transport)
 
-                self.sendAPI(0,192,'Chat request queued')
+                    if rdata:
+                        self.sendAPI(0,193,'Chat request pushed',cdata)
+                    else:
+                        self.sendAPI(0,192,'Chat request queued',cdata)
             else:
                 self.sendAPI(1,410,'User unauthorized')
 
@@ -256,11 +263,16 @@ class Echo(Protocol):
 
     def clientAcceptChat(self, data):
         try:
+            rdata = {}
+
             if self.authenticated:
                 try:
                     request = Chat(data['username'], self.user, data['port'], data['session'])
+                    transport = self.factory.chats[self.factory.chats.index(request)].user.transport
+                    rdata['session'] = data['session']
                     self.factory.chats.remove(request)
                     self.sendAPI(0,322,'Chat request accepted')
+                    self.sendAPI(0,322,'Chat request accepted',rdata,transport)
                 except ValueError:
                     self.sendAPI(1,420,'No request available')
 
