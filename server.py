@@ -21,6 +21,7 @@ if __name__ == '__main__':
     from twisted.python import log
 
     log.startLogging(sys.stdout)
+    log.startLogging(open('/var/log/chatserver.log', 'w'))
     factory = Factory()
     factory.protocol = protocol.Echo
     factory.clients = []

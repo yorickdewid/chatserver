@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 from twisted.internet.protocol import Protocol
-from model import User, Device 
+from model import User, Device, Chat 
 import json
 import uuid
 
@@ -11,7 +11,7 @@ class Echo(Protocol):
         self.authenticated = None
         self.user = None
 
-    def sendAPI(self, error, code, message, data = None):
+    def sendAPI(self, error, code, message, data = None, transport = None):
         api = {}
         api['error'] = error
         api['code'] = code
@@ -20,7 +20,10 @@ class Echo(Protocol):
         if data:
             api['data'] = data
 
-        self.transport.write(json.dumps([api]) + '\n')
+        if transport:
+            transport.write(json.dumps([api]) + '\n')
+        else:
+            self.transport.write(json.dumps([api]) + '\n')
  
     def clientPing(self, data):
         self.sendAPI(0,206,'Pong')
@@ -172,8 +175,10 @@ class Echo(Protocol):
     def clientDelete(self, data):
         try:
             if self.authenticated:
+                self.factory.clients.remove(self.user)
                 self.user.delete()
                 self.authenticated = None
+                self.user = None
                 self.sendAPI(0,291,'User data deleted')
             else:
                 self.sendAPI(1,410,'User unauthorized')
@@ -183,6 +188,8 @@ class Echo(Protocol):
 
     def clientHello(self, data):
         try:
+            rdata = {}
+
             if self.authenticated:
                 self.sendAPI(0,110,'User authenticated')
                 return
@@ -190,12 +197,21 @@ class Echo(Protocol):
             user = User(data['username'])
             if user.attemptToken(data['token']):
                 user.remote = self.transport.getPeer().host
-                user.transfer = self
+                user.transport = self.transport
                 user.uuid = uuid.uuid1()
                 self.authenticated = 1
                 self.user = user
                 self.factory.clients.append(user)
                 self.sendAPI(0,110,'User authenticated')
+
+                for chat in self.factory.chats:
+                    if chat.contact.name == user.name:
+                        rdata['username'] = chat.contact.name
+                        rdata['port'] = chat.port
+                        rdata['session'] = chat.session
+                        self.sendAPI(0,191,'Confirm chat request',rdata)
+
+                print '%s is authenticated' % user
             else:
                 self.sendAPI(1,405,'Credentials invalid')
 
@@ -204,11 +220,55 @@ class Echo(Protocol):
 
     def clientQuit(self, data = None):
         if self.authenticated:
+            for chat in self.factory.chats[:]:
+                if chat.user == self.user:
+                    self.factory.chats.remove(chat)
+
             self.authenticated = None
             self.factory.clients.remove(self.user)
             self.user = None
 
         self.sendAPI(0,151,'Signed off')
+
+    def clientRequestChat(self, data):
+        try:
+            rdata = {}
+
+            if self.authenticated:
+                contact = User(data['username'])
+                if contact.exist():
+                    request = Chat(self.user, contact, data['port'], uuid.uuid1().time_low)
+                    self.factory.chats.append(request)
+
+                    for other in self.factory.clients:
+                        if contact.name == other.name:
+                            rdata['username'] = self.user.name
+                            rdata['port'] = request.port
+                            rdata['session'] = request.session
+                            self.sendAPI(0,191,'Confirm chat request',rdata,other.transport)
+
+                self.sendAPI(0,192,'Chat request queued')
+            else:
+                self.sendAPI(1,410,'User unauthorized')
+
+        except (KeyError, TypeError):
+            self.sendAPI(1,401,'Not in reference format')
+
+    def clientAcceptChat(self, data):
+        try:
+            if self.authenticated:
+                try:
+                    request = Chat(data['username'], self.user, data['port'], data['session'])
+                    self.factory.chats.remove(request)
+                    self.sendAPI(0,322,'Chat request accepted')
+                except ValueError:
+                    self.sendAPI(1,420,'No request available')
+
+            else:
+                self.sendAPI(1,410,'User unauthorized')
+
+        except (KeyError, TypeError):
+            self.sendAPI(1,401,'Not in reference format')
 
     def handle(self, c):
         return {
@@ -224,7 +284,13 @@ class Echo(Protocol):
             290 : self.clientDelete,
             100 : self.clientHello,
             150 : self.clientQuit,
+            190 : self.clientRequestChat,
+            320 : self.clientAcceptChat,
         }[c]
+
+    def showlists(self):
+        print 'online: %s' % len(self.factory.clients)
+        print 'requests: %s' % len(self.factory.chats)
 
     def dataReceived(self, data):
         try:        
@@ -236,12 +302,9 @@ class Echo(Protocol):
 
             if 'data' in req:
                 data = req['data']
-
+            
             self.handle(code)(data)
-
-            for c in self.factory.clients:
-                print c.name, c.uuid
-
+            self.showlists()
         except ValueError:
             self.sendAPI(1,400,'Send data in JSON')
         except KeyError:

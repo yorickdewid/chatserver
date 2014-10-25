@@ -19,6 +19,9 @@ class User:
     def __eq__(self, other):
         return self.uuid == other.uuid
 
+    def __str__(self):
+        return '%s[%s]' % (self.name, self.uuid)
+
     def getUser(self):
         self.cursor.execute('SELECT * FROM user WHERE username=%s', self.name)
         row = self.cursor.fetchone()
@@ -157,7 +160,11 @@ class Device:
 class Chat:
     'Chat class'
 
-    def __init__(self, user, contact, port):
+    def __init__(self, user, contact, port, uuid):
         self.user = user
         self.contact = contact
         self.port = port
+        self.session = uuid
+
+    def __eq__(self, other):
+        return self.session == other.session
