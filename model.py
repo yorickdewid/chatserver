@@ -168,3 +168,6 @@ class Chat:
 
     def __eq__(self, other):
         return self.session == other.session and self.port == other.port
+
+    def __str__(self):
+        return '%s[%s]%s' % (self.user.name, self.session, self.contact.name)

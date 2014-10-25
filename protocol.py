@@ -216,8 +216,6 @@ class Echo(Protocol):
                         rdata['session'] = chat.session
                         rdata['remote'] = chat.user.remote
                         self.sendAPI(0,191,'Confirm chat request',rdata)
-
-                print '%s is authenticated' % user
             else:
                 self.sendAPI(1,405,'Credentials invalid')
 
@@ -275,12 +273,35 @@ class Echo(Protocol):
             if self.authenticated:
                 self.user.update()
                 try:
-                    request = Chat(data['username'], self.user, data['port'], data['session'])
+                    request = Chat(None, self.user, data['port'], data['session'])
                     transport = self.factory.chats[self.factory.chats.index(request)].user.transport
                     rdata['session'] = data['session']
                     self.factory.chats.remove(request)
                     self.sendAPI(0,322,'Chat request accepted')
                     self.sendAPI(0,322,'Chat request accepted',rdata,transport)
+                except ValueError:
+                    self.sendAPI(1,420,'No request available')
+
+            else:
+                self.sendAPI(1,410,'User unauthorized')
+
+        except (KeyError, TypeError):
+            self.sendAPI(1,401,'Not in reference format')
+
+    def clientDenyChat(self, data):
+        try:
+            rdata = {}
+
+            if self.authenticated:
+                self.user.update()
+                try:
+                    request = Chat(None, self.user, data['port'], data['session'])
+                    transport = self.factory.chats[self.factory.chats.index(request)].user.transport
+                    rdata['session'] = data['session']
+                    rdata['reason'] = data['reason']
+                    self.factory.chats.remove(request)
+                    self.sendAPI(1,422,'Chat request denied')
+                    self.sendAPI(1,422,'Chat request denied',rdata,transport)
                 except ValueError:
                     self.sendAPI(1,420,'No request available')
 
@@ -306,6 +327,7 @@ class Echo(Protocol):
             150 : self.clientQuit,
             190 : self.clientRequestChat,
             320 : self.clientAcceptChat,
+            490 : self.clientDenyChat,
         }[c]
 
     def getNewToken(self, input=None):
@@ -317,8 +339,13 @@ class Echo(Protocol):
         return ''.join(random.choice(chars) for _ in range(size))
 
     def showLists(self):
+        print '--- status ---'
         print 'online: %s' % len(self.factory.clients)
+        for user in self.factory.clients:
+            print user
         print 'requests: %s' % len(self.factory.chats)
+        for chat in self.factory.chats:
+            print chat
 
     def dataReceived(self, data):
         try:
@@ -336,7 +363,6 @@ class Echo(Protocol):
                 cdata = request['data']
             
             self.handle(code)(cdata)
-            self.showLists()
         except ValueError:
             self.sendAPI(1,400,'Send data in JSON')
         except KeyError:
@@ -344,6 +370,7 @@ class Echo(Protocol):
 
     def connectionMade(self):
         self.sendAPI(0,200,'Server ready')
+        self.showLists()
         print 'connect from %s' % self.transport.getPeer()
 
     def connectionLost(self, reason):
