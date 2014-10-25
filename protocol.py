@@ -305,17 +305,21 @@ class Echo(Protocol):
         print 'requests: %s' % len(self.factory.chats)
 
     def dataReceived(self, data):
-        try:        
-            req = json.loads(data.rstrip())[0]
-            data = None
-            code = req['code']
-            error = req['error'] #TODO not used at the moment
-            message = req['message'] #TODO not used at the moment
+        try:
+            line = data.rstrip()
+            if not line:
+                return
 
-            if 'data' in req:
-                data = req['data']
+            request = json.loads(line)[0]
+            cdata = None
+            code = request['code']
+            error = request['error'] #TODO not used at the moment
+            message = request['message'] #TODO not used at the moment
+
+            if 'data' in request:
+                cdata = request['data']
             
-            self.handle(code)(data)
+            self.handle(code)(cdata)
             self.showlists()
         except ValueError:
             self.sendAPI(1,400,'Send data in JSON')
