@@ -38,6 +38,10 @@ class Echo(Protocol):
             contact = User(data['username'])
             if contact.exist():
                 rdata['last_online'] = unicode(contact.lastonline.replace(microsecond=0))
+                for user in self.factory.clients:
+                    if user.name == contact.name:
+                        rdata['last_online'] = 'now'
+
                 self.sendAPI(0,226,'Last online returned',rdata)
             else:
                 self.sendAPI(1,405,'Credentials invalid')
@@ -68,6 +72,7 @@ class Echo(Protocol):
     def clientRegisterDevice(self, data):
         try:
             if self.authenticated:
+                self.user.update()
                 device = Device(data['device'])
                 if device.exist():
                     self.sendAPI(1,436,'Device already exist')
@@ -105,6 +110,7 @@ class Echo(Protocol):
             rcontacts = []
 
             if self.authenticated:
+                self.user.update()
                 if data:
                     for contact in data['contacts']:
                         contactuser = User(contact['contact'])
@@ -127,6 +133,7 @@ class Echo(Protocol):
     def clientDeleteContact(self, data):
         try:
             if self.authenticated:
+                self.user.update
                 for contact in data['contacts']:
                     contactuser = User(contact['contact'])
                     if contactuser.exist():
@@ -142,6 +149,7 @@ class Echo(Protocol):
     def clientDeleteDevice(self, data):
         try:
             if self.authenticated:
+                self.user.update()
                 device = Device(data['device'])
                 if device.exist():
                     self.user.deleteDevice(device)
@@ -158,6 +166,7 @@ class Echo(Protocol):
         rdevices = []
 
         if self.authenticated:
+            self.user.update()
             for device in self.user.getDeviceList():
                 rdevices.append({'device':device.device_id,'phone_number':device.phone_number})
 
@@ -186,6 +195,7 @@ class Echo(Protocol):
             rdata = {}
 
             if self.authenticated:
+                self.user.update()
                 self.sendAPI(0,110,'User authenticated')
                 return
 
@@ -216,6 +226,7 @@ class Echo(Protocol):
 
     def clientQuit(self, data = None):
         if self.authenticated:
+            self.user.update()
             for chat in self.factory.chats[:]:
                 if chat.user == self.user:
                     self.factory.chats.remove(chat)
@@ -232,6 +243,7 @@ class Echo(Protocol):
             cdata = {}
 
             if self.authenticated:
+                self.user.update()
                 contact = User(data['username'])
                 if contact.exist():
                     request = Chat(self.user, contact, data['port'], uuid.uuid1().time_low)
@@ -261,6 +273,7 @@ class Echo(Protocol):
             rdata = {}
 
             if self.authenticated:
+                self.user.update()
                 try:
                     request = Chat(data['username'], self.user, data['port'], data['session'])
                     transport = self.factory.chats[self.factory.chats.index(request)].user.transport
