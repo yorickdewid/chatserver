@@ -23,6 +23,8 @@ if __name__ == '__main__':
     log.startLogging(sys.stdout)
     factory = Factory()
     factory.protocol = protocol.Echo
+    factory.clients = []
+    factory.chats = []
     reactor.listenSSL(443, factory, ServerContextFactory())
     reactor.run()
 

@@ -3,8 +3,13 @@
 from twisted.internet.protocol import Protocol
 from model import User, Device 
 import json
+import uuid
 
 class Echo(Protocol):
+
+    def __init__(self):
+        self.authenticated = None
+        self.user = None
 
     def sendAPI(self, error, code, message, data = None):
         api = {}
@@ -24,18 +29,19 @@ class Echo(Protocol):
         try:
             rdata = {}
 
-            user = User(data['username'])
-            if user.exist():
-                rdata['last_online'] = unicode(user.lastonline.replace(microsecond=0))
+            contact = User(data['username'])
+            if contact.exist():
+                rdata['last_online'] = unicode(contact.lastonline.replace(microsecond=0))
                 self.sendAPI(0,226,'Last online returned',rdata)
             else:
                 self.sendAPI(1,405,'Credentials invalid')
 
-        except KeyError:
+        except (KeyError, TypeError):
             self.sendAPI(1,401,'Not in reference format')
 
     def clientRegister(self, data):
         try:
+            username = data['username']
             password = data['password']
             token = data['token']
 
@@ -47,7 +53,7 @@ class Echo(Protocol):
                 self.sendAPI(1,406,'Token invalid')
                 return
 
-            user = User(data['username'])
+            user = User(username)
             if user.exist():
                 self.sendAPI(1,441,'Credentials already exist')
                 return
@@ -63,21 +69,20 @@ class Echo(Protocol):
 
     def clientRegisterDevice(self, data):
         try:
-            user = User(data['username'])
-            if user.attemptToken(data['token']):
+            if self.authenticated:
                 device = Device(data['device'])
                 if device.exist():
                     self.sendAPI(1,436,'Device already exist')
                     return
 
-                device.user = user
+                device.user = self.user
                 if 'phone_number' in data:
                     device.phone_number = data['phone_number']
 
-                user.addDevice(device)
+                self.user.addDevice(device)
                 self.sendAPI(0,236,'Device registered')
             else:
-                self.sendAPI(1,405,'Credentials invalid')
+                self.sendAPI(1,410,'User unauthorized')
 
         except (KeyError, TypeError):
             self.sendAPI(1,401,'Not in reference format')
@@ -101,15 +106,14 @@ class Echo(Protocol):
             rdata = {}
             rcontacts = []
 
-            user = User(data['username'])
-            if user.attemptToken(data['token']):
-                if 'contacts' in data:
+            if self.authenticated:
+                if data:
                     for contact in data['contacts']:
                         contactuser = User(contact['contact'])
                         if contactuser.exist():
-                            user.addContact(contactuser)
+                            self.user.addContact(contactuser)
 
-                for contact in user.getContactList():
+                for contact in self.user.getContactList():
                     rcontacts.append({'contact':contact.name})
 
                 if len(rcontacts):
@@ -117,74 +121,96 @@ class Echo(Protocol):
 
                 self.sendAPI(0,211,'Contact list send',rdata)
             else:
-                self.sendAPI(1,405,'Credentials invalid')
+                self.sendAPI(1,410,'User unauthorized')
 
         except (KeyError, TypeError):
             self.sendAPI(1,401,'Not in reference format')
 
     def clientDeleteContact(self, data):
         try:
-            user = User(data['username'])
-            if user.attemptToken(data['token']):
+            if self.authenticated:
                 for contact in data['contacts']:
                     contactuser = User(contact['contact'])
                     if contactuser.exist():
-                        user.deleteContact(contactuser)
+                        self.user.deleteContact(contactuser)
 
                 self.sendAPI(0,276,'Contacts deleted')
             else:
-                self.sendAPI(1,405,'Credentials invalid')
+                self.sendAPI(1,410,'User unauthorized')
 
         except (KeyError, TypeError):
             self.sendAPI(1,401,'Not in reference format')
 
     def clientDeleteDevice(self, data):
         try:
-            user = User(data['username'])
-            if user.attemptToken(data['token']):
+            if self.authenticated:
                 device = Device(data['device'])
                 if device.exist():
-                    user.deleteDevice(device)
+                    self.user.deleteDevice(device)
 
                 self.sendAPI(0,266,'Device deleted')
             else:
-                self.sendAPI(1,405,'Credentials invalid')
+                self.sendAPI(1,410,'User unauthorized')
 
         except (KeyError, TypeError):
             self.sendAPI(1,401,'Not in reference format')
 
     def clientGetDeviceList(self, data):
-        try:
-            rdata = {}
-            rdevices = []
+        rdata = {}
+        rdevices = []
 
-            user = User(data['username'])
-            if user.attemptToken(data['token']):
-                for device in user.getDeviceList():
-                    rdevices.append({'device':device.device_id,'phone_number':device.phone_number})
+        if self.authenticated:
+            for device in self.user.getDeviceList():
+                rdevices.append({'device':device.device_id,'phone_number':device.phone_number})
 
-                if len(rdevices):
-                    rdata['devices'] = rdevices
-                self.sendAPI(0,221,'Device list send',rdata)
-            else:
-                self.sendAPI(1,405,'Credentials invalid')
-
-        except (KeyError, TypeError):
-            self.sendAPI(1,401,'Not in reference format')
+            if len(rdevices):
+                rdata['devices'] = rdevices
+            self.sendAPI(0,221,'Device list send',rdata)
+        else:
+            self.sendAPI(1,410,'User unauthorized')
 
     def clientDelete(self, data):
         try:
+            if self.authenticated:
+                self.user.delete()
+                self.authenticated = None
+                self.sendAPI(0,291,'User data deleted')
+            else:
+                self.sendAPI(1,410,'User unauthorized')
+
+        except (KeyError, TypeError):
+            self.sendAPI(1,401,'Not in reference format')
+
+    def clientHello(self, data):
+        try:
+            if self.authenticated:
+                self.sendAPI(0,110,'User authenticated')
+                return
+
             user = User(data['username'])
             if user.attemptToken(data['token']):
-                user.delete()
-                self.sendAPI(0,291,'User data deleted')
+                user.remote = self.transport.getPeer().host
+                user.transfer = self
+                user.uuid = uuid.uuid1()
+                self.authenticated = 1
+                self.user = user
+                self.factory.clients.append(user)
+                self.sendAPI(0,110,'User authenticated')
             else:
                 self.sendAPI(1,405,'Credentials invalid')
 
         except (KeyError, TypeError):
             self.sendAPI(1,401,'Not in reference format')
 
-    def handle(self, x):
+    def clientQuit(self, data = None):
+        if self.authenticated:
+            self.authenticated = None
+            self.factory.clients.remove(self.user)
+            self.user = None
+
+        self.sendAPI(0,151,'Signed off')
+
+    def handle(self, c):
         return {
             205 : self.clientPing,
             240 : self.clientRegister,
@@ -196,7 +222,9 @@ class Echo(Protocol):
             260 : self.clientDeleteDevice,
             220 : self.clientGetDeviceList,
             290 : self.clientDelete,
-        }[x]
+            100 : self.clientHello,
+            150 : self.clientQuit,
+        }[c]
 
     def dataReceived(self, data):
         try:        
@@ -211,6 +239,9 @@ class Echo(Protocol):
 
             self.handle(code)(data)
 
+            for c in self.factory.clients:
+                print c.name, c.uuid
+
         except ValueError:
             self.sendAPI(1,400,'Send data in JSON')
         except KeyError:
@@ -218,8 +249,9 @@ class Echo(Protocol):
 
     def connectionMade(self):
         self.sendAPI(0,200,'Server ready')
-        print 'connected'
+        print 'connect from %s' % self.transport.getPeer()
 
     def connectionLost(self, reason):
-        print 'disconnected'
+        self.clientQuit()
+        print 'disconnect from %s' % self.transport.getPeer()
 

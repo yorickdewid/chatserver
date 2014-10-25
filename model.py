@@ -7,11 +7,17 @@ class User:
 
     def __init__(self, name):
         self.name = name.lower()
-        self.token =[] 
-        self.password = []
-        self.lastonline = []
+        self.token = None
+        self.password = None
+        self.lastonline = None
+        self.remote = None
+        self.transport = None
+        self.uuid = None
         self.db = MySQLdb.connect('localhost','python','ABC@123','chatapp')
         self.cursor = self.db.cursor()
+
+    def __eq__(self, other):
+        return self.uuid == other.uuid
 
     def getUser(self):
         self.cursor.execute('SELECT * FROM user WHERE username=%s', self.name)
@@ -112,6 +118,9 @@ class Device:
         self.db = MySQLdb.connect('localhost','python','ABC@123','chatapp')
         self.cursor = self.db.cursor()
 
+    def __eq__(self, other):
+        return self.device_id == other.device_id
+
     def getDevice(self):
         self.cursor.execute('SELECT * FROM device WHERE device_id=%s', self.device_id)
         row = self.cursor.fetchone()
@@ -144,3 +153,11 @@ class Device:
 
     def __del__(self):
         self.db.close()
+
+class Chat:
+    'Chat class'
+
+    def __init__(self, user, contact, port):
+        self.user = user
+        self.contact = contact
+        self.port = port
