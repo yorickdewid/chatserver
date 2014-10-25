@@ -4,6 +4,9 @@ from twisted.internet.protocol import Protocol
 from model import User, Device, Chat 
 import json
 import uuid
+import string
+import random
+import hashlib
 
 class Echo(Protocol):
 
@@ -44,28 +47,20 @@ class Echo(Protocol):
 
     def clientRegister(self, data):
         try:
+            rdata = {}
+
             username = data['username']
-            password = data['password']
-            token = data['token']
-
-            if len(password) != 8:
-                self.sendAPI(1,405,'Password invalid')
-                return
-
-            if len(token) != 40:
-                self.sendAPI(1,406,'Token invalid')
-                return
-
             user = User(username)
             if user.exist():
                 self.sendAPI(1,441,'Credentials already exist')
                 return
 
-            user.token = token
-            user.password = password
+            user.token = self.getNewToken()
+            user.password = self.getNewPassword()
             user.save()
 
-            self.sendAPI(0,241,'User registered')
+            rdata['password'] = user.password
+            self.sendAPI(0,241,'User registered',rdata)
 
         except (KeyError, TypeError):
             self.sendAPI(1,401,'Not in reference format')
@@ -300,7 +295,15 @@ class Echo(Protocol):
             320 : self.clientAcceptChat,
         }[c]
 
-    def showlists(self):
+    def getNewToken(self, input=None):
+        if not input:
+            input = str(self.getNewPassword())
+        return hashlib.sha1(input).hexdigest()
+
+    def getNewPassword(self, size=8, chars=string.ascii_uppercase + string.digits):
+        return ''.join(random.choice(chars) for _ in range(size))
+
+    def showLists(self):
         print 'online: %s' % len(self.factory.clients)
         print 'requests: %s' % len(self.factory.chats)
 
@@ -320,7 +323,7 @@ class Echo(Protocol):
                 cdata = request['data']
             
             self.handle(code)(cdata)
-            self.showlists()
+            self.showLists()
         except ValueError:
             self.sendAPI(1,400,'Send data in JSON')
         except KeyError:

@@ -167,4 +167,4 @@ class Chat:
         self.session = uuid
 
     def __eq__(self, other):
-        return self.session == other.session
+        return self.session == other.session and self.port == other.port
