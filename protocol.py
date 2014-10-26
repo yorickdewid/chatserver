@@ -35,7 +35,16 @@ class Echo(Protocol):
         try:
             rdata = {}
 
-            contact = User(data['username'])
+            username = data['username']
+            if not username:
+                self.sendAPI(1,447,'Value empty')
+                return
+
+            if not isinstance(username, basestring):
+                self.sendAPI(1,448,'Value is wrong data type')
+                return
+
+            contact = User(username)
             if contact.exist():
                 rdata['last_online'] = unicode(contact.lastonline.replace(microsecond=0))
                 for user in self.factory.clients:
@@ -54,6 +63,18 @@ class Echo(Protocol):
             rdata = {}
 
             username = data['username']
+            if not username:
+                self.sendAPI(1,447,'Value empty')
+                return
+
+            if not isinstance(username, basestring):
+                self.sendAPI(1,448,'Value is wrong data type')
+                return
+
+            if len(username) > 50:
+                self.sendAPI(1,449,'Value exceeds maximum input length')
+                return
+
             user = User(username)
             if user.exist():
                 self.sendAPI(1,441,'Credentials already exist')
@@ -73,14 +94,36 @@ class Echo(Protocol):
         try:
             if self.authenticated:
                 self.user.update()
-                device = Device(data['device'])
+                device_id = data['device']
+                if not device_id:
+                    self.sendAPI(1,447,'Value empty')
+                    return
+
+                if len(device_id) > 120:
+                    self.sendAPI(1,449,'Value exceeds maximum input length')
+                    return
+
+                device = Device(device_id)
+                phone_number = data['phone_number']
+                if not isinstance(phone_number, int):
+                    self.sendAPI(1,448,'Value is wrong data type')
+                    return
+
+                if phone_number > 2147483646:
+                    self.sendAPI(1,449,'Value exceeds maximum input length')
+                    return
+
+                if phone_number < 0:
+                    self.sendAPI(1,447,'Value empty')
+                    return
+
                 if device.exist():
                     self.sendAPI(1,436,'Device already exist')
                     return
 
                 device.user = self.user
                 if 'phone_number' in data:
-                    device.phone_number = data['phone_number']
+                    device.phone_number = phone_number
 
                 self.user.addDevice(device)
                 self.sendAPI(0,236,'Device registered')
@@ -94,7 +137,16 @@ class Echo(Protocol):
         try:
             rdata = {}
 
-            user = User(data['username'])
+            username = data['username']
+            if not username:
+                self.sendAPI(1,447,'Value empty')
+                return
+
+            if not isinstance(username, basestring):
+                self.sendAPI(1,448,'Value is wrong data type')
+                return
+
+            user = User(username)
             if user.attemptPassword(data['password']):
                 rdata['token'] = user.token
                 self.sendAPI(0,246,'Token returned',rdata)
@@ -113,7 +165,16 @@ class Echo(Protocol):
                 self.user.update()
                 if data:
                     for contact in data['contacts']:
-                        contactuser = User(contact['contact'])
+                        ccontact = contact['contact']
+                        if not ccontact:
+                            self.sendAPI(1,447,'Value empty')
+                            return
+
+                        if not isinstance(ccontact, basestring):
+                            self.sendAPI(1,448,'Value is wrong data type')
+                            return
+
+                        contactuser = User(ccontact)
                         if contactuser.exist():
                             self.user.addContact(contactuser)
 
@@ -135,7 +196,16 @@ class Echo(Protocol):
             if self.authenticated:
                 self.user.update
                 for contact in data['contacts']:
-                    contactuser = User(contact['contact'])
+                    ccontact = contact['contact']
+                    if not ccontact:
+                        self.sendAPI(1,447,'Value empty')
+                        return
+
+                    if not isinstance(ccontact, basestring):
+                        self.sendAPI(1,448,'Value is wrong data type')
+                        return
+
+                    contactuser = User(ccontact)
                     if contactuser.exist():
                         self.user.deleteContact(contactuser)
 
@@ -150,7 +220,16 @@ class Echo(Protocol):
         try:
             if self.authenticated:
                 self.user.update()
-                device = Device(data['device'])
+                device_id = data['device']
+                if not device_id:
+                    self.sendAPI(1,447,'Value empty')
+                    return
+
+                if not isinstance(device_id, basestring):
+                    self.sendAPI(1,448,'Value is wrong data type')
+                    return
+
+                device = Device(device_id)
                 if device.exist():
                     self.user.deleteDevice(device)
 
@@ -199,7 +278,16 @@ class Echo(Protocol):
                 self.sendAPI(0,110,'User authenticated')
                 return
 
-            user = User(data['username'])
+            username = data['username']
+            if not username:
+                self.sendAPI(1,447,'Value empty')
+                return
+
+            if not isinstance(username, basestring):
+                self.sendAPI(1,448,'Value is wrong data type')
+                return
+
+            user = User(username)
             if user.attemptToken(data['token']):
                 user.remote = self.transport.getPeer().host
                 user.transport = self.transport
@@ -242,7 +330,29 @@ class Echo(Protocol):
 
             if self.authenticated:
                 self.user.update()
-                contact = User(data['username'])
+                username = data['username']
+                if not username:
+                    self.sendAPI(1,447,'Value empty')
+                    return
+
+                if not isinstance(username, basestring):
+                    self.sendAPI(1,448,'Value is wrong data type')
+                    return
+
+                port = data['port']
+                if not isinstance(port, int):
+                    self.sendAPI(1,448,'Value is wrong data type')
+                    return
+
+                if port > 65535:
+                    self.sendAPI(1,449,'Value exceeds maximum input length')
+                    return
+
+                if port < 0:
+                    self.sendAPI(1,447,'Value empty')
+                    return
+
+                contact = User(username)
                 if contact.exist():
                     request = Chat(self.user, contact, data['port'], uuid.uuid1().time_low)
                     self.factory.chats.append(request)
@@ -260,6 +370,8 @@ class Echo(Protocol):
                         self.sendAPI(0,193,'Chat request pushed',cdata)
                     else:
                         self.sendAPI(0,192,'Chat request queued',cdata)
+                else:
+                   self.sendAPI(1,405,'Credentials invalid')
             else:
                 self.sendAPI(1,410,'User unauthorized')
 
@@ -273,9 +385,31 @@ class Echo(Protocol):
             if self.authenticated:
                 self.user.update()
                 try:
-                    request = Chat(None, self.user, data['port'], data['session'])
+                    session = data['session']
+                    if not isinstance(session, int):
+                        self.sendAPI(1,448,'Value is wrong data type')
+                        return
+
+                    if session < 0:
+                        self.sendAPI(1,447,'Value empty')
+                        return
+
+                    port = data['port']
+                    if not isinstance(port, int):
+                        self.sendAPI(1,448,'Value is wrong data type')
+                        return
+
+                    if port > 65535:
+                        self.sendAPI(1,449,'Value exceeds maximum input length')
+                        return
+
+                    if port < 0:
+                        self.sendAPI(1,447,'Value empty')
+                        return
+
+                    request = Chat(None, self.user, port, session)
                     transport = self.factory.chats[self.factory.chats.index(request)].user.transport
-                    rdata['session'] = data['session']
+                    rdata['session'] = session
                     self.factory.chats.remove(request)
                     self.sendAPI(0,322,'Chat request accepted')
                     self.sendAPI(0,322,'Chat request accepted',rdata,transport)
@@ -295,10 +429,41 @@ class Echo(Protocol):
             if self.authenticated:
                 self.user.update()
                 try:
-                    request = Chat(None, self.user, data['port'], data['session'])
+                    session = data['session']
+                    if not isinstance(session, int):
+                        self.sendAPI(1,448,'Value is wrong data type')
+                        return
+
+                    if session < 0:
+                        self.sendAPI(1,447,'Value empty')
+                        return
+
+                    port = data['port']
+                    if not isinstance(port, int):
+                        self.sendAPI(1,448,'Value is wrong data type')
+                        return
+
+                    if port > 65535:
+                        self.sendAPI(1,449,'Value exceeds maximum input length')
+                        return
+
+                    if port < 0:
+                        self.sendAPI(1,447,'Value empty')
+                        return
+
+                    reason = data['reason']
+                    if not reason:
+                        self.sendAPI(1,447,'Value empty')
+                        return
+
+                    if not isinstance(reason, basestring):
+                        self.sendAPI(1,448,'Value is wrong data type')
+                        return
+
+                    request = Chat(None, self.user, port, session)
                     transport = self.factory.chats[self.factory.chats.index(request)].user.transport
-                    rdata['session'] = data['session']
-                    rdata['reason'] = data['reason']
+                    rdata['session'] = session
+                    rdata['reason'] = reason
                     self.factory.chats.remove(request)
                     self.sendAPI(1,422,'Chat request denied')
                     self.sendAPI(1,422,'Chat request denied',rdata,transport)
@@ -311,8 +476,11 @@ class Echo(Protocol):
         except (KeyError, TypeError):
             self.sendAPI(1,401,'Not in reference format')
 
+    def clientDefault(self, data):
+        self.sendAPI(1,404,'Command does not exist')
+
     def handle(self, c):
-        return {
+        map = {
             205 : self.clientPing,
             240 : self.clientRegister,
             245 : self.clientGetToken,
@@ -328,7 +496,12 @@ class Echo(Protocol):
             190 : self.clientRequestChat,
             320 : self.clientAcceptChat,
             490 : self.clientDenyChat,
-        }[c]
+        }
+
+        if c in map:
+            return map[c]
+        else:
+            return self.clientDefault
 
     def getNewToken(self, input=None):
         if not input:
