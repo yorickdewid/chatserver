@@ -4,10 +4,6 @@ from OpenSSL import SSL
 
 class ServerContextFactory:
     def getContext(self):
-        """Create an SSL context.
-        
-        This is a sample implementation that loads a certificate from a file 
-        called 'server.pem'."""
         ctx = SSL.Context(SSL.SSLv23_METHOD)
         ctx.use_certificate_file('/etc/ssl/certs/cert.crt')
         ctx.use_privatekey_file('/etc/ssl/private/priv.key')
@@ -20,8 +16,7 @@ if __name__ == '__main__':
     from twisted.internet import ssl, reactor
     from twisted.python import log
 
-    log.startLogging(sys.stdout)
-    log.startLogging(open('/var/log/chatserver.log', 'w'))
+    log.startLogging(open('/var/log/chatserver.log', 'a'))
     factory = Factory()
     factory.protocol = protocol.Echo
     factory.clients = []
