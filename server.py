@@ -16,11 +16,12 @@ if __name__ == '__main__':
     from twisted.internet import ssl, reactor
     from twisted.python import log
 
-    log.startLogging(open('/var/log/chatserver.log', 'a'))
+    #log.startLogging(open('/var/log/chatserver.log', 'a'))
+    log.startLogging(sys.stdout)
     factory = Factory()
     factory.protocol = protocol.Echo
     factory.clients = []
-    factory.chats = []
+    factory.messages = []
     reactor.listenSSL(443, factory, ServerContextFactory())
     reactor.run()
 

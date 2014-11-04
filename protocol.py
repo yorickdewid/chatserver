@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 from twisted.internet.protocol import Protocol
-from model import User, Device, Chat 
+from model import User, Device, Message
 import json
 import uuid
 import string
@@ -297,13 +297,14 @@ class Echo(Protocol):
                 self.factory.clients.append(user)
                 self.sendAPI(0,110,'User authenticated')
 
-                for chat in self.factory.chats:
-                    if chat.contact.name == user.name:
-                        rdata['username'] = chat.user.name
-                        rdata['port'] = chat.port
-                        rdata['session'] = chat.session
-                        rdata['remote'] = chat.user.remote
-                        self.sendAPI(0,191,'Confirm chat request',rdata)
+                for message in self.factory.messages:
+                    if message.contact.name == user.name:
+                        rdata['username'] = message.user.name
+                        rdata['session'] = message.session
+                        rdata['message'] = message.message
+                        rdata['cipher'] = message.cipher
+                        rdata['timestamp'] = message.timestamp
+                        self.sendAPI(0,191,'Message received',rdata)
             else:
                 self.sendAPI(1,405,'Credentials invalid')
 
@@ -313,9 +314,9 @@ class Echo(Protocol):
     def clientQuit(self, data = None):
         if self.authenticated:
             self.user.update()
-            for chat in self.factory.chats[:]:
-                if chat.user == self.user:
-                    self.factory.chats.remove(chat)
+            for message in self.factory.messages[:]:
+                if message.user == self.user:
+                    self.factory.messages.remove(message)
 
             self.authenticated = None
             self.factory.clients.remove(self.user)
@@ -323,153 +324,110 @@ class Echo(Protocol):
 
         self.sendAPI(0,151,'Signed off')
 
-    def clientRequestChat(self, data):
+    def clientReadMessage(self, data):
+        try:
+            rdata = {}
+
+            if self.authenticated:
+                self.user.update()
+                try:
+                    session = data['session']
+                    if not isinstance(session, int):
+                        self.sendAPI(1,448,'Value is wrong data type')
+                        return
+
+                    if session < 0:
+                        self.sendAPI(1,447,'Value empty')
+                        return
+
+                    rmessage = Message(session)
+                    transport = self.factory.messages[self.factory.messages.index(rmessage)].user.transport
+                    rdata['session'] = session
+                    self.factory.messages.remove(rmessage)
+                    self.sendAPI(0,322,'Notification send')
+                    self.sendAPI(0,324,'Message read',rdata,transport)
+                except ValueError:
+                    self.sendAPI(1,420,'No message available')
+
+            else:
+                self.sendAPI(1,410,'User unauthorized')
+
+        except (KeyError, TypeError):
+            self.sendAPI(1,401,'Not in reference format')
+
+    def clientMessage(self, data):
         try:
             rdata = {}
             cdata = {}
 
             if self.authenticated:
                 self.user.update()
-                username = data['username']
-                if not username:
+                cipher = data['cipher']
+                if not cipher:
                     self.sendAPI(1,447,'Value empty')
                     return
 
-                if not isinstance(username, basestring):
+                if not isinstance(cipher, basestring):
                     self.sendAPI(1,448,'Value is wrong data type')
                     return
 
-                port = data['port']
-                if not isinstance(port, int):
-                    self.sendAPI(1,448,'Value is wrong data type')
+                if cipher not in ['AES', 'PLAIN']:
+                    self.sendAPI(1,417,'Cipher not supported')
                     return
 
-                if port > 65535:
-                    self.sendAPI(1,449,'Value exceeds maximum input length')
-                    return
-
-                if port < 0:
+                message = data['message']
+                if not message:
                     self.sendAPI(1,447,'Value empty')
                     return
 
-                contact = User(username)
-                if contact.exist():
-                    request = Chat(self.user, contact, data['port'], uuid.uuid1().time_low)
-                    self.factory.chats.append(request)
-                    cdata['session'] = request.session
+                if not isinstance(message, basestring):
+                    self.sendAPI(1,448,'Value is wrong data type')
+                    return
 
+                timestamp = data['timestamp']
+                if not timestamp:
+                    self.sendAPI(1,447,'Value empty')
+                    return
+
+                if not isinstance(timestamp, basestring):
+                    self.sendAPI(1,448,'Value is wrong data type')
+                    return
+
+                contact = data['username']
+                if not contact:
+                    self.sendAPI(1,447,'Value empty')
+                    return
+
+                if not isinstance(contact, basestring):
+                   self.sendAPI(1,448,'Value is wrong data type')
+                   return
+
+                contactuser = User(contact)
+                if contactuser.exist():
+                    rmessage = Message(uuid.uuid1().time_low)
+                    rmessage.user = self.user
+                    rmessage.contact = contactuser
+                    rmessage.message = message
+                    rmessage.cipher = cipher
+                    rmessage.timestamp = timestamp
+
+                    self.factory.messages.append(rmessage)
+                    cdata['session'] = rmessage.session
                     for other in self.factory.clients:
-                        if contact.name == other.name:
+                        if contactuser.name == other.name:
                             rdata['username'] = self.user.name
-                            rdata['port'] = request.port
-                            rdata['session'] = request.session
-                            rdata['remote'] = self.user.remote
-                            self.sendAPI(0,191,'Confirm chat request',rdata,other.transport)
+                            rdata['session'] = rmessage.session
+                            rdata['message'] = rmessage.message
+                            rdata['cipher'] = rmessage.cipher
+                            rdata['timestamp'] = rmessage.timestamp
+                            self.sendAPI(0,191,'Message received',rdata,other.transport)
 
                     if rdata:
-                        self.sendAPI(0,193,'Chat request pushed',cdata)
+                        self.sendAPI(0,193,'Message pushed',cdata)
                     else:
-                        self.sendAPI(0,192,'Chat request queued',cdata)
+                        self.sendAPI(0,192,'Message queued',cdata)
                 else:
                    self.sendAPI(1,405,'Credentials invalid')
-            else:
-                self.sendAPI(1,410,'User unauthorized')
-
-        except (KeyError, TypeError):
-            self.sendAPI(1,401,'Not in reference format')
-
-    def clientAcceptChat(self, data):
-        try:
-            rdata = {}
-
-            if self.authenticated:
-                self.user.update()
-                try:
-                    session = data['session']
-                    if not isinstance(session, int):
-                        self.sendAPI(1,448,'Value is wrong data type')
-                        return
-
-                    if session < 0:
-                        self.sendAPI(1,447,'Value empty')
-                        return
-
-                    port = data['port']
-                    if not isinstance(port, int):
-                        self.sendAPI(1,448,'Value is wrong data type')
-                        return
-
-                    if port > 65535:
-                        self.sendAPI(1,449,'Value exceeds maximum input length')
-                        return
-
-                    if port < 0:
-                        self.sendAPI(1,447,'Value empty')
-                        return
-
-                    request = Chat(None, self.user, port, session)
-                    transport = self.factory.chats[self.factory.chats.index(request)].user.transport
-                    rdata['session'] = session
-                    self.factory.chats.remove(request)
-                    self.sendAPI(0,322,'Chat request accepted')
-                    self.sendAPI(0,322,'Chat request accepted',rdata,transport)
-                except ValueError:
-                    self.sendAPI(1,420,'No request available')
-
-            else:
-                self.sendAPI(1,410,'User unauthorized')
-
-        except (KeyError, TypeError):
-            self.sendAPI(1,401,'Not in reference format')
-
-    def clientDenyChat(self, data):
-        try:
-            rdata = {}
-
-            if self.authenticated:
-                self.user.update()
-                try:
-                    session = data['session']
-                    if not isinstance(session, int):
-                        self.sendAPI(1,448,'Value is wrong data type')
-                        return
-
-                    if session < 0:
-                        self.sendAPI(1,447,'Value empty')
-                        return
-
-                    port = data['port']
-                    if not isinstance(port, int):
-                        self.sendAPI(1,448,'Value is wrong data type')
-                        return
-
-                    if port > 65535:
-                        self.sendAPI(1,449,'Value exceeds maximum input length')
-                        return
-
-                    if port < 0:
-                        self.sendAPI(1,447,'Value empty')
-                        return
-
-                    reason = data['reason']
-                    if not reason:
-                        self.sendAPI(1,447,'Value empty')
-                        return
-
-                    if not isinstance(reason, basestring):
-                        self.sendAPI(1,448,'Value is wrong data type')
-                        return
-
-                    request = Chat(None, self.user, port, session)
-                    transport = self.factory.chats[self.factory.chats.index(request)].user.transport
-                    rdata['session'] = session
-                    rdata['reason'] = reason
-                    self.factory.chats.remove(request)
-                    self.sendAPI(1,422,'Chat request denied')
-                    self.sendAPI(1,422,'Chat request denied',rdata,transport)
-                except ValueError:
-                    self.sendAPI(1,420,'No request available')
-
             else:
                 self.sendAPI(1,410,'User unauthorized')
 
@@ -493,9 +451,8 @@ class Echo(Protocol):
             290 : self.clientDelete,
             100 : self.clientHello,
             150 : self.clientQuit,
-            190 : self.clientRequestChat,
-            320 : self.clientAcceptChat,
-            490 : self.clientDenyChat,
+            320 : self.clientReadMessage,
+            350 : self.clientMessage,
         }
 
         if c in map:
@@ -516,9 +473,10 @@ class Echo(Protocol):
         print 'online: %s' % len(self.factory.clients)
         for user in self.factory.clients:
             print user
-        print 'requests: %s' % len(self.factory.chats)
-        for chat in self.factory.chats:
-            print chat
+        print 'messages: %s' % len(self.factory.messages)
+        for message in self.factory.messages:
+            print message
+        #print len(self.transport)
 
     def dataReceived(self, data):
         try:

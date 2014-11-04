@@ -157,17 +157,19 @@ class Device:
     def __del__(self):
         self.db.close()
 
-class Chat:
-    'Chat class'
+class Message:
+    'Message class'
 
-    def __init__(self, user, contact, port, uuid):
-        self.user = user
-        self.contact = contact
-        self.port = port
-        self.session = uuid
+    def __init__(self, session):
+        self.user = None
+        self.contact = None
+        self.cipher = None
+        self.session = session
+        self.message = None
+        self.timestamp = None
 
     def __eq__(self, other):
-        return self.session == other.session and self.port == other.port
+        return self.session == other.session
 
     def __str__(self):
         return '%s[%s]%s' % (self.user.name, self.session, self.contact.name)
