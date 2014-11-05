@@ -1,5 +1,10 @@
 #!/usr/bin/python
 
+import sys
+import protocol
+from twisted.internet.protocol import Factory
+from twisted.internet import ssl, reactor
+from twisted.python import log
 from OpenSSL import SSL
 
 class ServerContextFactory:
@@ -9,19 +14,17 @@ class ServerContextFactory:
         ctx.use_privatekey_file('/etc/ssl/private/priv.key')
         return ctx
 
-if __name__ == '__main__':
-    import sys
-    import protocol
-    from twisted.internet.protocol import Factory
-    from twisted.internet import ssl, reactor
-    from twisted.python import log
+class EchoFactory(Factory):
+    protocol = protocol.Echo
+    connections = 0
+    clients = []
+    messages = []
 
+if __name__ == '__main__':
     #log.startLogging(open('/var/log/chatserver.log', 'a'))
     log.startLogging(sys.stdout)
-    factory = Factory()
+    factory = EchoFactory()
     factory.protocol = protocol.Echo
-    factory.clients = []
-    factory.messages = []
     reactor.listenSSL(443, factory, ServerContextFactory())
     reactor.run()
 

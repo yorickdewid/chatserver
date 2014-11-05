@@ -470,13 +470,13 @@ class Echo(Protocol):
 
     def showLists(self):
         print '--- status ---'
+        print 'connections: %s ' % self.factory.connections
         print 'online: %s' % len(self.factory.clients)
         for user in self.factory.clients:
             print user
         print 'messages: %s' % len(self.factory.messages)
         for message in self.factory.messages:
             print message
-        #print len(self.transport)
 
     def dataReceived(self, data):
         try:
@@ -500,11 +500,13 @@ class Echo(Protocol):
             self.sendAPI(1,401,'Not in reference format')
 
     def connectionMade(self):
+        self.factory.connections += 1
         self.sendAPI(0,200,'Server ready')
         self.showLists()
         print 'connect from %s' % self.transport.getPeer()
 
     def connectionLost(self, reason):
+        self.factory.connections -= 1
         self.clientQuit()
         print 'disconnect from %s' % self.transport.getPeer()
 
