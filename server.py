@@ -21,8 +21,8 @@ class EchoFactory(Factory):
     messages = []
 
 if __name__ == '__main__':
-    #log.startLogging(open('/var/log/chatserver.log', 'a'))
-    log.startLogging(sys.stdout)
+    log.startLogging(open('/var/log/chatserver.log', 'a'))
+    #log.startLogging(sys.stdout)
     factory = EchoFactory()
     factory.protocol = protocol.Echo
     reactor.listenSSL(443, factory, ServerContextFactory())

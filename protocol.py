@@ -8,6 +8,8 @@ import string
 import random
 import hashlib
 
+version = '1.1'
+
 class Echo(Protocol):
 
     def __init__(self):
@@ -30,6 +32,10 @@ class Echo(Protocol):
  
     def clientPing(self, data):
         self.sendAPI(0,206,'Pong')
+
+    def clientVersion(self, data):
+        rdata = {'version':version}
+        self.sendAPI(0,251,'Version',rdata)
 
     def clientLastOnline(self, data):
         try:
@@ -440,6 +446,7 @@ class Echo(Protocol):
     def handle(self, c):
         map = {
             205 : self.clientPing,
+            250 : self.clientVersion,
             240 : self.clientRegister,
             245 : self.clientGetToken,
             225 : self.clientLastOnline,
