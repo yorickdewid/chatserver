@@ -172,4 +172,4 @@ class Message:
         return self.session == other.session
 
     def __str__(self):
-        return '%s[%s]%s' % (self.user.name, self.session, self.contact.name)
+        return '%s<-[%s]->%s' % (self.user.name, self.session, self.contact.name)
